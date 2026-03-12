@@ -115,17 +115,19 @@ def get_perfil():
 @app.route('/rag')
 def get_rag():
     """
-    Rota inteligente para LSL: busca speaker + nomes citados na mensagem.
-    Uso: /rag?speaker=sailespy2&msg=quem+e+elemer+piek
+    Rota inteligente para LSL: busca speaker + nomes citados + DIV/NAVE/LORE.
+    Uso: /rag?speaker=sailespy2&msg=quem+e+elemer+piek&ctx=ultimo_citado
     Retorno: texto plano com contexto RAG completo.
     """
     speaker = request.args.get('speaker', '').strip()
     msg = request.args.get('msg', '').strip()
+    ctx = request.args.get('ctx', '').strip()  # Follow-up context
 
     if not speaker:
         return "ERRO:parametro speaker obrigatorio", 400
 
     resultado_rag = ""
+    msg_lower = msg.lower() if msg else ""
 
     # 1. Buscar ficha do speaker
     speaker_data = buscar_tripulante(speaker)
@@ -133,11 +135,59 @@ def get_rag():
     if speaker_data:
         s = ascii_dict(speaker_data)
         speaker_busca = s.get('nome_busca', '')
-        resultado_rag += f"[FALANTE {forceASCII(speaker)} e {s.get('raca','?')}, {s.get('patente','?')} da Divisao {s.get('divisao','?')}, serve ha {s.get('tempo_servico','?')}]. "
+        resultado_rag += f"[FALANTE {forceASCII(speaker)} e {s.get('raca','?')}, {s.get('patente','?')} da Divisao {s.get('divisao','?')}, serve ha {s.get('tempo_servico','?')}, posto: {s.get('posto','?')}]. "
 
-    # 2. Buscar nomes citados na mensagem
+    # 2. Detecção de contexto: DIV / NAVE / LORE
+    want_div = any(w in msg_lower for w in ['divisao', 'divisoes', 'departamento'])
+    want_nave = any(w in msg_lower for w in ['nave', 'naves', 'uss', 'esquadra'])
+    want_lore = any(w in msg_lower for w in ['lore', 'historia', 'estacao', 'sb-245', 'nova trivas', 'neural', 'academia', 'ingresso', 'fanfilme', 'localizacao'])
+
+    if want_div:
+        # Tentar buscar divisão específica
+        div_found = False
+        divs = listar_divisoes()
+        for d in divs:
+            dname = forceASCII(d.get('nome', '')).lower()
+            if dname and dname in msg_lower:
+                dd = ascii_dict(d)
+                resultado_rag += f"[DIV {dd.get('nome','?')}: cor {dd.get('cor','?')}, {dd.get('qtd_tripulantes','?')} tripulantes. {dd.get('descricao','')}]. "
+                div_found = True
+        if not div_found and ('divisoes' in msg_lower or 'todas' in msg_lower):
+            for d in divs:
+                dd = ascii_dict(d)
+                resultado_rag += f"[DIV {dd.get('nome','?')}: {dd.get('qtd_tripulantes','?')} tripulantes, cor {dd.get('cor','?')}]. "
+
+    if want_nave:
+        nave_found = False
+        navs = listar_naves()
+        for n in navs:
+            nname = forceASCII(n.get('nome', '')).lower()
+            if any(w in msg_lower for w in nname.split() if len(w) >= 4):
+                nn = ascii_dict(n)
+                resultado_rag += f"[NAVE {nn.get('nome','?')}: classe {nn.get('classe','?')}, comissionada {nn.get('comissionamento','?')}, cmd: {nn.get('comandante','?')}, tipo: {nn.get('tipo','?')}, status: {nn.get('status','?')}. {nn.get('descricao','')}]. "
+                nave_found = True
+        if not nave_found and ('naves' in msg_lower or 'esquadra' in msg_lower):
+            for n in navs:
+                nn = ascii_dict(n)
+                resultado_rag += f"[NAVE {nn.get('nome','?')}: {nn.get('status','?')}, cmd: {nn.get('comandante','?')}]. "
+
+    if want_lore:
+        # Buscar lore por palavras da mensagem
+        lore_words = ['historia', 'estacao', 'academia', 'localizacao', 'fanfilme', 'ingresso']
+        for lw in lore_words:
+            if lw in msg_lower:
+                lr = buscar_lore(lw)
+                for l in lr:
+                    ll = ascii_dict(l)
+                    resultado_rag += f"[LORE {ll.get('tema','?')}: {ll.get('conteudo','')}]. "
+
+    # 3. Buscar nomes citados na mensagem
     if msg:
-        citados = buscar_nomes_na_mensagem(msg, excluir_nome_busca=speaker_busca)
+        # Combinar msg com ctx para busca
+        search_msg = msg
+        if ctx:
+            search_msg = msg + " " + ctx
+        citados = buscar_nomes_na_mensagem(search_msg, excluir_nome_busca=speaker_busca)
         for cit in citados:
             c = ascii_dict(cit)
             resultado_rag += f"[CITOU {c.get('nome_busca','?')}: {c.get('raca','?')} {c.get('patente','?')} ({c.get('divisao','?')}), serve ha {c.get('tempo_servico','?')}, posto: {c.get('posto','?')}]. "
