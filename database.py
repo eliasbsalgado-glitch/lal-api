@@ -136,3 +136,59 @@ def buscar_lore(tema):
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def buscar_nomes_na_mensagem(mensagem, excluir_nome_busca=""):
+    """
+    Extrai palavras da mensagem e busca tripulantes correspondentes no banco.
+    Retorna lista de dicts com até 3 tripulantes encontrados.
+    """
+    import re
+    # Limpa pontuacao e converte para lowercase
+    clean = re.sub(r'[.,!?;:"\'\(\)]', ' ', mensagem.lower())
+    palavras = clean.split()
+
+    conn = get_db()
+    encontrados = []
+    nomes_ja_encontrados = set()
+    if excluir_nome_busca:
+        nomes_ja_encontrados.add(excluir_nome_busca.lower())
+
+    # 1. Tentar pares de palavras consecutivas (nomes compostos como "elemer piek")
+    for i in range(len(palavras) - 1):
+        if len(encontrados) >= 3:
+            break
+        par = palavras[i] + " " + palavras[i + 1]
+        if len(par) < 5:
+            continue
+        row = conn.execute(
+            "SELECT * FROM tripulantes WHERE nome_busca = ?", (par,)
+        ).fetchone()
+        if row and dict(row)['nome_busca'] not in nomes_ja_encontrados:
+            encontrados.append(dict(row))
+            nomes_ja_encontrados.add(dict(row)['nome_busca'])
+
+    # 2. Tentar palavras individuais (>= 4 chars)
+    for palavra in palavras:
+        if len(encontrados) >= 3:
+            break
+        if len(palavra) < 4:
+            continue
+        # Pula palavras comuns que nao sao nomes
+        skip = {'quem', 'como', 'qual', 'onde', 'voce', 'sobre', 'busque',
+                'informacoes', 'dados', 'fale', 'conte', 'diga', 'para',
+                'esse', 'essa', 'este', 'esta', 'dele', 'dela', 'nome',
+                'rank', 'divisao', 'patente', 'tripulante', 'oficial',
+                'lal ', 'data', 'conhece', 'sabe'}
+        if palavra in skip:
+            continue
+        row = conn.execute(
+            "SELECT * FROM tripulantes WHERE nome_busca LIKE ?", (f"{palavra}%",)
+        ).fetchone()
+        if row and dict(row)['nome_busca'] not in nomes_ja_encontrados:
+            encontrados.append(dict(row))
+            nomes_ja_encontrados.add(dict(row)['nome_busca'])
+
+    conn.close()
+    return encontrados
+

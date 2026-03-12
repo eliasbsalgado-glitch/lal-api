@@ -7,7 +7,8 @@ import unicodedata
 from flask import Flask, request, jsonify
 from database import (
     buscar_tripulante, listar_divisoes, buscar_divisao,
-    listar_patentes, listar_naves, buscar_lore, init_db, DB_PATH
+    listar_patentes, listar_naves, buscar_lore, buscar_nomes_na_mensagem,
+    init_db, DB_PATH
 )
 
 app = Flask(__name__)
@@ -108,6 +109,43 @@ def get_perfil():
         return perfil, 200, {'Content-Type': 'text/plain; charset=ascii'}
     else:
         return f"NAO_ENCONTRADO:{forceASCII(nome)}", 404, {'Content-Type': 'text/plain; charset=ascii'}
+
+
+# ===== ROTA RAG COMPLETA PARA LSL =====
+@app.route('/rag')
+def get_rag():
+    """
+    Rota inteligente para LSL: busca speaker + nomes citados na mensagem.
+    Uso: /rag?speaker=sailespy2&msg=quem+e+elemer+piek
+    Retorno: texto plano com contexto RAG completo.
+    """
+    speaker = request.args.get('speaker', '').strip()
+    msg = request.args.get('msg', '').strip()
+
+    if not speaker:
+        return "ERRO:parametro speaker obrigatorio", 400
+
+    resultado_rag = ""
+
+    # 1. Buscar ficha do speaker
+    speaker_data = buscar_tripulante(speaker)
+    speaker_busca = ""
+    if speaker_data:
+        s = ascii_dict(speaker_data)
+        speaker_busca = s.get('nome_busca', '')
+        resultado_rag += f"[FALANTE {forceASCII(speaker)} e {s.get('raca','?')}, {s.get('patente','?')} da Divisao {s.get('divisao','?')}, serve ha {s.get('tempo_servico','?')}]. "
+
+    # 2. Buscar nomes citados na mensagem
+    if msg:
+        citados = buscar_nomes_na_mensagem(msg, excluir_nome_busca=speaker_busca)
+        for cit in citados:
+            c = ascii_dict(cit)
+            resultado_rag += f"[CITOU {c.get('nome_busca','?')}: {c.get('raca','?')} {c.get('patente','?')} ({c.get('divisao','?')}), serve ha {c.get('tempo_servico','?')}, posto: {c.get('posto','?')}]. "
+
+    if not resultado_rag:
+        return "SEM_DADOS", 404, {'Content-Type': 'text/plain; charset=ascii'}
+
+    return resultado_rag, 200, {'Content-Type': 'text/plain; charset=ascii'}
 
 
 # ===== INIT =====
