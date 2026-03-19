@@ -85,14 +85,7 @@ def export_tripulantes(cur):
 
 
 def export_pontos(cur):
-    # Regras de promoção: pontos mínimos por patente
-    PATENTE_PONTOS = {
-        'Recruta': 0, 'Designado': 50, 'Cadete': 150,
-        'Alferes': 300, 'Tenente Junior': 500, 'Tenente': 700,
-        'Tenente Comandante': 900, 'Comandante': 1100,
-        'Capitao': 1300, 'Comodoro': 99999, 'Vice-Almirante': 99999,
-        'Almirante': 99999,
-    }
+    # Regras de promoco: pontos minimos por patente
     PROXIMA_PATENTE = {
         'Recruta': 'Designado', 'Designado': 'Cadete', 'Cadete': 'Alferes',
         'Alferes': 'Tenente Junior', 'Tenente Junior': 'Tenente',
@@ -100,49 +93,59 @@ def export_pontos(cur):
         'Comandante': 'Capitao', 'Capitao': 'Comodoro',
         'Comodoro': None, 'Vice-Almirante': None, 'Almirante': None,
     }
+    PONTOS_NECESSARIOS = {
+        'Designado': 50, 'Cadete': 150, 'Alferes': 300,
+        'Tenente Junior': 500, 'Tenente': 700, 'Tenente Comandante': 900,
+        'Comandante': 1100, 'Capitao': 1300, 'Comodoro': 99999,
+    }
 
+    # Somar pontos por tripulante direto da tabela pontos
     cur.execute("""
-        SELECT slug as ficha_slug, patente,
-               COALESCE((SELECT SUM(pontos) FROM historico_pontos hp WHERE hp.ficha_slug = f.slug), 0) as total
+        SELECT f.slug as ficha_slug, f.patente,
+               COALESCE((SELECT SUM(p.pontos) FROM pontos p WHERE p.ficha_slug = f.slug), 0) as total
         FROM fichas f
     """)
     rows = cur.fetchall()
     result = []
     for r in rows:
-        patente     = fa(r['patente'] or '')
-        total       = int(r['total'] or 0)
-        prox        = PROXIMA_PATENTE.get(patente)
-        pontos_nec  = PATENTE_PONTOS.get(prox, 99999) if prox else 99999
-        pontos_falt = max(0, pontos_nec - total) if prox else 0
+        patente    = fa(r['patente'] or '')
+        total      = int(r['total'] or 0)
+        prox       = PROXIMA_PATENTE.get(patente)
+        pontos_nec = PONTOS_NECESSARIOS.get(prox, 0) if prox else 0
         result.append({
-            'ficha_slug':        r['ficha_slug'],
-            'total':             total,
-            'patente_atual':     patente,
-            'proxima_patente':   prox or 'PATENTE MAXIMA',
-            'pontos_necessarios': pontos_nec if prox else 0,
-            'pontos_faltam':     pontos_falt,
-            'updated_at':        datetime.now().isoformat(),
+            'ficha_slug':         r['ficha_slug'],
+            'total':              total,
+            'patente_atual':      patente,
+            'proxima_patente':    prox or 'PATENTE MAXIMA',
+            'pontos_necessarios': pontos_nec,
+            'pontos_faltam':      max(0, pontos_nec - total) if prox else 0,
+            'updated_at':         datetime.now().isoformat(),
         })
     print(f"  -> {len(result)} registros de pontos exportados")
     return result
 
 
 def export_historico_pontos(cur):
-    cur.execute("""
-        SELECT ficha_slug, pontos, motivo, data
-        FROM historico_pontos
-        ORDER BY data DESC
-        LIMIT 2000
-    """)
-    rows = cur.fetchall()
-    result = [{
-        'ficha_slug': r['ficha_slug'],
-        'pontos':     int(r['pontos'] or 0),
-        'motivo':     r['motivo'] or '',
-        'data':       str(r['data']) if r['data'] else '',
-    } for r in rows]
-    print(f"  -> {len(result)} entradas de histórico de pontos exportadas")
-    return result
+    # Tabela 'pontos' tem: at_id, ficha_slug, tipo, descricao, R, D, M, P, bonus, pontos, data
+    try:
+        cur.execute("""
+            SELECT ficha_slug, pontos, descricao as motivo, tipo, data
+            FROM pontos
+            ORDER BY data DESC
+            LIMIT 2000
+        """)
+        rows = cur.fetchall()
+        result = [{
+            'ficha_slug': r['ficha_slug'],
+            'pontos':     int(r['pontos'] or 0),
+            'motivo':     fa((r['motivo'] or '') + (' [' + fa(r['tipo'] or '') + ']' if r['tipo'] else '')),
+            'data':       str(r['data']) if r['data'] else '',
+        } for r in rows]
+        print(f"  -> {len(result)} entradas de historico de pontos exportadas")
+        return result
+    except Exception as e:
+        print(f"  [AVISO] Historico pontos: {e}")
+        return []
 
 
 def export_naves(cur):
@@ -252,7 +255,7 @@ def export_missoes(cur):
 
 def main():
     print("=" * 60)
-    print("LAL-API Sync — MySQL Local → Render")
+    print("LAL-API Sync -- MySQL Local -> Render")
     print("=" * 60)
 
     try:
