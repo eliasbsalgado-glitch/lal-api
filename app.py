@@ -220,9 +220,10 @@ def get_rag():
             speaker_slug = t.get('slug', '')
             entry = (f"[FALANTE] {t['nome']} | Patente: {t['patente']} | "
                      f"Divisao: {t['divisao']}")
-            if t.get('departamento'): entry += f" | Depto: {t['departamento']}"
-            if t.get('raca'):         entry += f" | Raca: {t['raca']}"
+            if t.get('departamento'):  entry += f" | Depto: {t['departamento']}"
+            if t.get('raca'):          entry += f" | Raca: {t['raca']}"
             if t.get('tempo_servico'): entry += f" | Servico: {t['tempo_servico']}"
+            if trip.get('data_admissao'): entry += f" | Incorporacao: {trip['data_admissao']}"
             resultado.append(entry)
 
             # Pontos de promoção do speaker
