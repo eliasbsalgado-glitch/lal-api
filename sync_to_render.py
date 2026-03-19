@@ -22,7 +22,7 @@ MYSQL_DB   = 'frota_venture'
 MYSQL_USER = 'root'
 MYSQL_PASS = ''
 
-RENDER_URL  = 'https://lal-api.onrender.com/sync/full'
+RENDER_URL  = 'https://frotaventure.pythonanywhere.com/sync/full'
 SYNC_KEY    = 'venture2025'  # deve coincidir com LAL_SYNC_KEY no Render
 
 

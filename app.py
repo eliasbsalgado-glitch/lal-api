@@ -256,13 +256,13 @@ def get_rag():
                     f"[DIARIOS {t['nome']}] Possui {trip['total_diarios']} diario(s) publico(s)."
                 )
 
-            # Timeline (últimas 5 entradas)
+            # Timeline (toda a carreira - ordem cronologica inversa)
             if any(w in msg_lower for w in ['carreira', 'historico', 'timeline',
                                              'quando', 'promovido', 'transfer',
                                              'minha carreira', 'meu historico']):
                 try:
                     tl = json.loads(trip.get('timeline') or '[]')
-                    tl_sorted = sorted(tl, key=lambda x: x.get('data',''), reverse=True)[:5]
+                    tl_sorted = sorted(tl, key=lambda x: x.get('data',''), reverse=True)
                     for ev in tl_sorted:
                         resultado.append(f"[CARREIRA] {ev.get('data','?')}: {fa(ev.get('evento',''))}")
                 except:
@@ -274,8 +274,8 @@ def get_rag():
                 try:
                     cur = json.loads(trip.get('cursos') or '{}')
                     academia = cur.get('academia', [])
-                    if academy := academia[:8]:
-                        for c_item in academy:
+                    if academia:
+                        for c_item in academia:
                             resultado.append(
                                 f"[CURSO] {fa(c_item.get('area',''))} - "
                                 f"{fa(c_item.get('nome',''))} ({c_item.get('data','')})"
