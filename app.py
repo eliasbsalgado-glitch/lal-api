@@ -256,30 +256,64 @@ def get_rag():
                     f"[DIARIOS {t['nome']}] Possui {trip['total_diarios']} diario(s) publico(s)."
                 )
 
-            # Timeline (toda a carreira - ordem cronologica inversa)
+            # Timeline — sumario compacto (evita Stack-Heap Collision no LSL)
             if any(w in msg_lower for w in ['carreira', 'historico', 'timeline',
                                              'quando', 'promovido', 'transfer',
-                                             'minha carreira', 'meu historico']):
+                                             'minha carreira', 'meu historico',
+                                             'incorporado', 'condecor', 'medalha']):
                 try:
                     tl = json.loads(trip.get('timeline') or '[]')
                     tl_sorted = sorted(tl, key=lambda x: x.get('data',''), reverse=True)
-                    for ev in tl_sorted:
-                        resultado.append(f"[CARREIRA] {ev.get('data','?')}: {fa(ev.get('evento',''))}")
+                    total_ev = len(tl_sorted)
+
+                    if tl_sorted:
+                        # Grupos por tipo
+                        promos  = [ev for ev in tl_sorted
+                                   if 'promovido' in fa(ev.get('evento','')).lower()]
+                        conds   = [ev for ev in tl_sorted
+                                   if any(w in fa(ev.get('evento','')).lower()
+                                          for w in ['condecorado','medalha','condecoracao'])]
+                        recentes = tl_sorted[:4]
+
+                        partes = [f"[CARREIRA {t['nome']}] {total_ev} eventos registrados"]
+
+                        if promos:
+                            p_list = " > ".join([
+                                fa(p.get('evento','')).replace('Foi promovido a patente de','').strip()
+                                + '(' + (p.get('data','')[:7]) + ')'
+                                for p in reversed(promos)
+                            ])
+                            partes.append(f"Promocoes: {p_list}")
+
+                        if conds:
+                            c_list = " | ".join([
+                                fa(c.get('evento',''))[:60] + '(' + (c.get('data','')[:7]) + ')'
+                                for c in conds
+                            ])
+                            partes.append(f"Condecoracoes: {c_list}")
+
+                        r_list = " | ".join([
+                            ev.get('data','')[:10] + ' ' + fa(ev.get('evento',''))[:40]
+                            for ev in recentes
+                        ])
+                        partes.append(f"Ultimos eventos: {r_list}")
+
+                        resultado.append("\n".join(partes))
                 except:
                     pass
 
-            # Cursos
+            # Cursos — sumario compacto
             if any(w in msg_lower for w in ['curso', 'academia', 'formacao', 'treina',
                                              'meus cursos', 'estudei']):
                 try:
                     cur = json.loads(trip.get('cursos') or '{}')
                     academia = cur.get('academia', [])
                     if academia:
-                        for c_item in academia:
-                            resultado.append(
-                                f"[CURSO] {fa(c_item.get('area',''))} - "
-                                f"{fa(c_item.get('nome',''))} ({c_item.get('data','')})"
-                            )
+                        nomes = " | ".join([
+                            fa(c.get('nome',''))[:40] + '(' + c.get('data','')[:7] + ')'
+                            for c in academia
+                        ])
+                        resultado.append(f"[CURSOS {t['nome']}] {len(academia)} cursos: {nomes}")
                 except:
                     pass
 
